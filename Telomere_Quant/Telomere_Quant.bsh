@@ -1,0 +1,177 @@
+import IAClasses.Utils;
+import IO.DataReader;
+import IO.DataWriter;
+import Particle_Analysis.Particle_Mapper;
+import Particle_Analysis.Particle_Mapper;
+import ij.IJ;
+import ij.ImagePlus;
+import ij.process.ByteProcessor;
+import ij.text.TextWindow;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.lang.String;
+import javax.swing.JFileChooser;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.math3.geometry.euclidean.twod.Line;
+import org.apache.commons.math3.geometry.euclidean.twod.Vector2D;
+import ij.gui.GenericDialog;
+
+/**
+ *
+ * @author Dave Barry <david.barry at crick.ac.uk>
+ */
+
+    private final String[] RESULTS_HEADINGS = new String[]{"Cell ID", "Telomere 1 / Telomere 2 (%)", "Telomere 3 / Telomere 4 (%)"};
+
+    /**
+     * @param args the command line arguments
+     */
+//    public static void main(String[] args) {
+//        try {
+//            (new Telomere_Quant()).run();
+//        } catch (IOException e) {
+//        }
+//        System.exit(0);
+//    }
+
+        TextWindow results = new TextWindow("Telomere Quant Results", DataWriter.convertArrayToString("", RESULTS_HEADINGS, "\t"), new String(), 640, 480);
+        int nIndex = Particle_Mapper.N_INDEX;
+        int idIndex = Particle_Mapper.ID_INDEX;
+        int xIndex = Particle_Mapper.N_INDEX + 1;
+        int yIndex = xIndex + 1;
+        int iIndex = yIndex + 1;
+
+        ArrayList colHeadings = new ArrayList();
+
+        JFileChooser chooser = new JFileChooser("C:/Users/barryd/OneDrive - The Francis Crick Institute/Working Data/Boulton/Pol/Rtel1f-f Terc+-+ Control Ad-Cre 2/Particle Mapper_v5.153_Output/Slice_1");
+        chooser.setDialogTitle("Select coordinate file...");
+        if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) {
+            IJ.log("Error opening file.");
+            return;
+        }
+        File file = chooser.getSelectedFile();
+        double res = 1.0;
+        GenericDialog gd = new GenericDialog("");
+        gd.addNumericField("Spatial Resolution: ", res, 3, 6, IJ.micronSymbol + "m");
+        gd.showDialog();
+        if (gd.wasOKed()) {
+            res = gd.getNextNumber();
+        } else {
+            return;
+        }
+        double[][] data = DataReader.readFile(file, CSVFormat.EXCEL, colHeadings, null);
+
+        int N = data.length;
+        int M = data[0].length;
+
+//IJ.log(" rows " + N);
+//IJ.log(colHeadings.size() + " columns " + M);
+//for(i=0;i<N;i++){
+//	line = "";
+//	for(j=0;j<M;j++){
+//		line = line + data[i][j] + " ";
+//	}
+//	IJ.log(line);
+//}
+//Find cells with four particles
+        ImagePlus ref = IJ.openImage(file.getParent() + File.separator + "Nuclei Mask.png");
+        int width = ref.getWidth();
+        int height = ref.getHeight();
+        ByteProcessor s1 = new ByteProcessor(width, height);
+        s1.setValue(0);
+        s1.fill();
+        s1.setValue(255);
+        ByteProcessor s2 = (ByteProcessor) s1.duplicate();
+        s2.setValue(255);
+        for (int i = 0; i < N; i++) {
+            if (data[i][nIndex] == 4) {
+                int cellID = (int) Math.round(data[i][idIndex]);
+                double minDist = Double.MAX_VALUE;
+                int[] relations = new int[4];
+                //IJ.log("Cell ID = " + cellID);
+                int step = iIndex - nIndex;
+                double xc = 0.0, yc = 0.0;
+                for (int p1 = 0; p1 < 4; p1++) {
+                    int offset = p1 * step;
+                    xc += data[i][offset + xIndex];
+                    yc += data[i][offset + yIndex];
+                }
+                xc /= 4;
+                yc /= 4;
+                for (int p1 = 0; p1 < 4; p1++) {
+                    int offset = p1 * step;
+                    double x1 = data[i][offset + xIndex];
+                    double y1 = data[i][offset + yIndex];
+                    for (int p2 = p1 + 1; p2 < 4; p2++) {
+                        offset = p2 * step;
+                        double x2 = data[i][offset + xIndex];
+                        double y2 = data[i][offset + yIndex];
+                        double distance = Utils.calcDistance(x1, y1, x2, y2);
+                        //IJ.log("P1: ("+x1+", "+y1+") P2: ("+x2+", "+y2+") Distance:"+distance);
+                        if (distance < minDist) {
+                            minDist = distance;
+                            int p3 = 0, p4 = 0;
+                            while (p3 == p1 || p3 == p2) {
+                                p3++;
+                            }
+                            while (p4 == p1 || p4 == p2 || p4 == p3) {
+                                p4++;
+                            }
+                            relations = new int[]{p1, p2, p3, p4};
+                        }
+                    }
+                }
+                double x0 = data[i][step * relations[relations[0]] + xIndex];
+                double x1 = data[i][step * relations[relations[1]] + xIndex];
+                double y0 = data[i][step * relations[relations[0]] + yIndex];
+                double y1 = data[i][step * relations[relations[1]] + yIndex];
+                double x2 = data[i][step * relations[relations[2]] + xIndex];
+                double y2 = data[i][step * relations[relations[2]] + yIndex];
+                double[] midPoint = new double[]{(x0 + x1) / 2.0, (y0 + y1) / 2.0};
+                Line L1 = new Line(new Vector2D(new double[]{xc, yc}), new Vector2D(midPoint));
+                double d1 = L1.distance(new Vector2D(new double[]{x0, y0}));
+                double d2 = L1.distance(new Vector2D(new double[]{x2, y2}));
+                Line L2 = new Line(new Vector2D(new double[]{xc, yc + minDist * 0.1}), new Vector2D(new double[]{midPoint[0], midPoint[1] + minDist * 0.1}));
+                double d3 = L2.distance(new Vector2D(new double[]{x0, y0}));
+                double d4 = L2.distance(new Vector2D(new double[]{x2, y2}));
+                if ((d1 < d3 && d2 > d4) || (d1 > d3 && d2 < d4)) {
+                    int temp = relations[2];
+                    relations[2] = relations[3];
+                    relations[3] = temp;
+                    x2 = data[i][step * relations[relations[2]] + xIndex];
+                    y2 = data[i][step * relations[relations[2]] + yIndex];
+                }
+                double x3 = data[i][step * relations[relations[3]] + xIndex];
+                double y3 = data[i][step * relations[relations[3]] + yIndex];
+
+                //IJ.log("First Pair: (" + x0 + ", " + y0 + "), (" + x1 + ", " + y1 + ")");
+                //IJ.log("Second Pair: (" + x2 + ", " + y2 + "), (" + x3 + ", " + y3 + ")");
+                double mag1 = data[i][step * relations[0] + iIndex];
+                double mag2 = data[i][step * relations[1] + iIndex];
+                double mag3 = data[i][step * relations[2] + iIndex];
+                double mag4 = data[i][step * relations[3] + iIndex];
+                for (int j = 0; j < 4; j++) {
+                    //IJ.log("x: " + data[i][step * relations[j] + xIndex] + " y: " + data[i][step * relations[j] + yIndex]);
+                    int x = (int) Math.round(data[i][step * relations[j] + xIndex] / res);
+                    int y = (int) Math.round(data[i][step * relations[j] + yIndex] / res);
+                    //IJ.log("x: " + x + " y: " + y + " i%2: " + (j % 2));
+                    if (j % 2 == 0) {
+                        s1.drawOval(x - 2, y - 2, 5, 5);
+                    } else {
+                        s2.drawOval(x - 2, y - 2, 5, 5);
+                    }
+                }
+                double r1, r2;
+                if (mag1 > mag2) {
+                    r1 = 100.0 * mag2 / mag1;
+                    r2 = 100.0 * mag4 / mag3;
+                } else {
+                    r1 = 100.0 * mag1 / mag2;
+                    r2 = 100.0 * mag3 / mag4;
+                }
+                results.append(cellID + "\t"+ r1 + "\t" + r2);
+            }
+        }
+        IJ.saveAs(new ImagePlus("", s1), "PNG", file.getParent() + File.separator + "S1.png");
+        IJ.saveAs(new ImagePlus("", s2), "PNG", file.getParent() + File.separator + "S2.png");
