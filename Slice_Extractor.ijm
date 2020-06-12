@@ -17,8 +17,14 @@ macro "Slice Extractor" {
 	while(lengthOf(sliceLabel) < 3){
 		sliceLabel = "0" + sliceLabel;
 	}
+
+	imageName = getTitle();
+
+	extIndex = lastIndexOf(imageName, ".");
+
+	imageNameWithoutExtension = substring(imageName, 0, extIndex);
 	
-	newTitle = File.nameWithoutExtension() + "_Z" + sliceLabel;
+	newTitle = imageNameWithoutExtension + "_Z" + sliceLabel;
 	
 	run("Duplicate...", "title=" + newTitle);
 
