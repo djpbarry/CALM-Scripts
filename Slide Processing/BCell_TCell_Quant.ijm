@@ -5,14 +5,14 @@
 
 inputFile = File.openDialog("Select input file"); 
 
-tCellFilterRadius = 10;
-bCellFilterRadius = 20;
+tCellFilterRadius = 3;
+bCellFilterRadius = 6.5;
 threshMethods = getList("threshold.methods");
-bCellThresh = "Default";
+bCellThresh = "Yen";
 tCellThresh = "Default";
 minBCellZoneSize = 10000;
-tCellBufferZoneSize = 20;
-CMFDACellFilterRadius = 2;
+tCellBufferZoneSize = 12;
+CMFDACellFilterRadius = 1.5;
 CMFDAProminence = 100;
 series = 10;
 
@@ -26,6 +26,7 @@ Dialog.addChoice("T Cell Threshold Method", threshMethods, tCellThresh);
 Dialog.addNumber("T Cell Zone Buffer Size", tCellBufferZoneSize);
 Dialog.addNumber("CMFDA B Cell Filter Radius", CMFDACellFilterRadius);
 Dialog.addNumber("CMFDA Cell Prominence", CMFDAProminence);
+Dialog.addMessage("\n\nAll parameters are specified in microns", 14);
 Dialog.show();
 
 series = Dialog.getNumber();
@@ -49,38 +50,29 @@ setForegroundColor(255);
 
 run("Bio-Formats Importer", "open=[" + inputFile + "] specify_range series_" + series + " c_begin_" + series + "=2 c_end_" + series + "=4 c_step_" + series + "=1");
 
+getPixelSize(unit, pixelWidth, pixelHeight);
+
 title = getTitle();
 
 C1 = "C1-" + title;
 C2 = "C2-" + title;
 C3 = "C3-" + title;
 
-print("Averaging channels...");
 run("Split Channels");
-imageCalculator("Average create 32-bit", C1, C2);
-result = getTitle();
-imageCalculator("Average create 32-bit", result, C3);
-tissue = getTitle();
-close(result);
-close(C3);
-print("Done.");
 
 print("Detecting B-Cell Zones...");
-selectWindow(tissue);
-print("Filtering...");
-run("Gaussian Blur...", "sigma=" + bCellFilterRadius);
-print("Thresholding...");
+selectWindow(C1);
+run("Duplicate...", "title=Dup_" + C1);
+run("32-bit");
+run("Subtract Background...", "rolling=500");
+run("Gaussian Blur...", "sigma=" + bCellFilterRadius + " scaled");
 setAutoThreshold(bCellThresh);
-setOption("BlackBackground", false);
 run("Convert to Mask");
 binaryTissue = getTitle();
 
 roiManager("reset");
 print("Filtering Objects...");
 run("Analyze Particles...", "size=" + minBCellZoneSize + "-Infinity show=Masks exclude");
-close(binaryTissue);
-print("Filling Holes...");
-run("Fill Holes");
 regions = getTitle();
 run("Create Selection");
 Roi.setStrokeColor(255,255,255);
@@ -88,11 +80,12 @@ roiManager("Add");
 roiManager("select", roiManager("count")-1);
 roiManager("rename", "B-Cell Zone");
 print("Done.");
+close(binaryTissue);
 
 print("Detecting T-Cell Zones...");
-selectWindow(C2);
+imageCalculator("Subtract create 32-bit", C3, C2);
 print("Filtering...");
-run("Gaussian Blur...", "sigma=" + tCellFilterRadius);
+run("Gaussian Blur...", "sigma=" + tCellFilterRadius + " scaled");
 roiManager("Select", 0);
 run("Clear Outside");
 print("Thresholding...");
@@ -105,11 +98,13 @@ roiManager("Add");
 roiManager("select", roiManager("count")-1);
 roiManager("rename", "T-Cell Zone");	
 innerRegions = getTitle();
+close(C2);
+close(C3);
 
 print("Refining...");
 selectWindow(regions);
 run("Select None");
-run("Options...", "iterations=" + tCellBufferZoneSize + " count=1 do=Erode");
+run("Options...", "iterations=" + round(tCellBufferZoneSize / pixelWidth) + " count=1 do=Erode");
 imageCalculator("AND create", regions, innerRegions);
 resultantRegions = getTitle();
 imageCalculator("Difference create", resultantRegions, regions);
@@ -126,7 +121,7 @@ print("Done.");
 
 print("Calculating Distances To/From T-Cell Zone Boundaries...");
 selectWindow(resultantRegions);
-run("Duplicate...", " ");
+run("Duplicate...", "title=Dup_" + resultantRegions);
 run("Invert");
 invertedResultantRegions = getTitle();
 run("Chamfer Distance Map", "distances=[Borgefors (3,4)] output=[16 bits] normalize");
@@ -154,7 +149,7 @@ print("Done.");
 print("Detecting CMFDA-Lablled B Cells...");
 selectWindow(C1);
 print("Filtering...");
-run("Gaussian Blur...", "sigma=" + CMFDACellFilterRadius);
+run("Gaussian Blur...", "sigma=" + CMFDACellFilterRadius + " scaled");
 roiManager("Select", 0);
 run("Clear Outside");
 run("Select None");
@@ -166,7 +161,10 @@ run("Set Measurements...", "mean centroid redirect=[" + finalDistanceMap + "] de
 selectWindow(points);
 print("Analysing and Generating Results...");
 run("Analyze Particles...", "size=0-Infinity display add");
-Table.renameColumn("Mean", "Distance");
+headings = split(String.getResultsHeadings);
+if(headings.length > 0){
+	Table.renameColumn(headings[0], "Distance");
+}
 close(points);
 close(finalDistanceMap);
 print("Done.");
