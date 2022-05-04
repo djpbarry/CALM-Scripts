@@ -10,6 +10,7 @@
 var title = "Luxendo File Converter";
 
 macro "Luxendo File Converter"{
+	print("\\Clear");
 
 	Dialog.create(title);
 	Dialog.addDirectory("Input", getDirectory("cwd"));
@@ -41,14 +42,17 @@ macro "Luxendo File Converter"{
 	
 	run("BDP2 Open Position And Channel Subset...", "viewingmodality=[Do not show] directory=[" + input + "] enablearbitraryplaneslicing=false regexp=[.*/[sS]tack_0_(?<C1>[cC]hannel_.*)/(?<C2>Cam_.*)_(?<T>\\d+)(|.lux).h5] channelsubset=[" + channels + "] ");
 	
+	nT = getNumberofTimepoints() - 1;
+	
+	run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=true projectionmode=[" + proj + "] savevolumes=false channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
+	
 	if(bdv){
-		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[BigDataViewerXMLHDF5] saveprojections=false projectionmode=[" + proj + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[None] tstart=0 tend=0 ");
+		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[BigDataViewerXMLHDF5] saveprojections=false projectionmode=[" + proj + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[None] tstart=0 tend=" + nT + " ");
 	}
 	if(tiff){
-		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=false projectionmode=[" + proj + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=0 ");
+		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=false projectionmode=[" + proj + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
 	}
 	
-	run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=true projectionmode=[" + proj + "] savevolumes=false channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=0 ");
 }
 
 
@@ -65,3 +69,15 @@ function listFiles(dir, result) {
      }
      return result;
   }
+  
+function getNumberofTimepoints(){
+	logWindow = split(getInfo("log"), "\n");
+
+	for (i = 0; i < logWindow.length; i++) {
+		line = split(logWindow[i], ":");
+		if(startsWith(line[0], "nT") > 0){
+			return parseInt(line[1]);
+		}
+	}
+	return -1;
+}
