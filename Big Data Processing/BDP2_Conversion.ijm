@@ -27,7 +27,8 @@ macro "Luxendo File Converter"{
 	proj = Dialog.getChoice();
 	
 	nCPUs = parseInt(call("ij.util.ThreadUtil.getNbCpus"));
-	regex = ".*/[sS]tack_0_(?<C1>[cC]hannel_.*)/(?<C2>Cam_.*)_(?<T>\\d+)(|.lux).h5";
+	///regex = ".*/[sS]tack_0_(?<C1>[cC]hannel_.*)/(?<C2>Cam_.*)_(?<T>\\d+)(|.lux).h5";
+	regex = "(?<C2>Cam_.*)_(?<T>\\d+)(|.lux).h5";
 	stack = "_stack_0_";
 
 	channelsubset = newArray(0);
@@ -41,7 +42,7 @@ macro "Luxendo File Converter"{
 	}
 	
 	run("BDP2 Open Position And Channel Subset...", "viewingmodality=[Do not show] directory=[" + input + "] enablearbitraryplaneslicing=false regexp=[.*/[sS]tack_0_(?<C1>[cC]hannel_.*)/(?<C2>Cam_.*)_(?<T>\\d+)(|.lux).h5] channelsubset=[" + channels + "] ");
-	
+		
 	nT = getNumberofTimepoints() - 1;
 	
 	run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=true projectionmode=[" + proj + "] savevolumes=false channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
@@ -62,7 +63,7 @@ function listFiles(dir, result) {
      	fullPath = dir + File.separator() + list[i];
         if (File.isDirectory(fullPath)){
            result = listFiles(fullPath, result);
-        } else if (matches(fullPath, regex)){
+        } else if (matches(list[i], regex)){
 			result = Array.concat(result, substring(File.getName(File.getParent(fullPath)), lengthOf(stack) - 1) + "_"
 			+ substring(list[i], 0, lastIndexOf(list[i], "_")));
         }
