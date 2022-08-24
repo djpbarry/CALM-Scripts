@@ -15,16 +15,31 @@ macro "Luxendo File Converter"{
 	Dialog.create(title);
 	Dialog.addDirectory("Input", getDirectory("cwd"));
 	Dialog.addDirectory("Output", getDirectory("cwd"));
-	Dialog.addMessage("Select Output Formats:");
-	Dialog.addCheckboxGroup(1, 3, newArray("BigDataViewer", "OME-TIFF"), newArray(false, false));
-	Dialog.addChoice("Generate Projections", newArray("sum", "max"), "max");
+	Dialog.addMessage("");
+	Dialog.addCheckbox("Generate Converted Files?", false);
+	Dialog.addToSameRow();
+	Dialog.addChoice("Select File Type:", newArray("BigDataViewer", "OME-TIFF"), "OME-TIFF");
+	Dialog.addMessage("");
+	Dialog.addCheckbox("Generate Projections?", false);
+	Dialog.addToSameRow();
+	Dialog.addChoice("Select Projection Type:", newArray("sum", "max"), "max");
+	Dialog.addMessage("");
+	Dialog.addCheckbox("Generate Downsampled Volumes?", false);
+	Dialog.addToSameRow();
+	Dialog.addNumber("Downsample factor in X and Y:", 1);
+	Dialog.addToSameRow();
+	Dialog.addNumber("Downsample factor in Z:", 1);
 	Dialog.show();
 	
 	input = Dialog.getString();
 	output = Dialog.getString();
-	bdv = Dialog.getCheckbox();
-	tiff = Dialog.getCheckbox();
-	proj = Dialog.getChoice();
+	convert = Dialog.getCheckbox();
+	fileType = Dialog.getChoice();
+	proj = Dialog.getCheckbox();
+	projType = Dialog.getChoice();
+	down = Dialog.getCheckbox();
+	downXY = Dialog.getNumber();
+	downZ = Dialog.getNumber();
 	
 	nCPUs = parseInt(call("ij.util.ThreadUtil.getNbCpus"));
 	///regex = ".*/[sS]tack_0_(?<C1>[cC]hannel_.*)/(?<C2>Cam_.*)_(?<T>\\d+)(|.lux).h5";
@@ -45,15 +60,21 @@ macro "Luxendo File Converter"{
 		
 	nT = getNumberofTimepoints() - 1;
 	
-	run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=true projectionmode=[" + proj + "] savevolumes=false channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
+	nC = getNumberofChannels() - 1;
 	
-	if(bdv){
-		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[BigDataViewerXMLHDF5] saveprojections=false projectionmode=[" + proj + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[None] tstart=0 tend=" + nT + " ");
+	if(proj){
+		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=true projectionmode=[" + projType + "] savevolumes=false channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
 	}
-	if(tiff){
-		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=false projectionmode=[" + proj + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
+	if(convert && matches(fileType, "BigDataViewer")){
+		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[BigDataViewerXMLHDF5] saveprojections=false projectionmode=[" + projType + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[None] tstart=0 tend=" + nT + " ");
 	}
-	
+	if(convert && matches(fileType, "OME-TIFF")){
+		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=false projectionmode=[" + projType + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
+	}
+	if(down){
+		run("BDP2 Bin...", "inputimage=[raw] outputimagename=[raw-bin-" + downXY + "-" + downZ + "] viewingmodality=[Do not show] binwidthxpixels=" + downXY + " binwidthypixels=" + downZ + " binwidthzpixels=1 ");
+		run("BDP2 Save As...", "inputimage=[raw-bin-" + downXY + "-" + downZ + "] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=false projectionmode=[" + projType + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
+	}
 }
 
 
@@ -77,6 +98,18 @@ function getNumberofTimepoints(){
 	for (i = 0; i < logWindow.length; i++) {
 		line = split(logWindow[i], ":");
 		if(startsWith(line[0], "nT") > 0){
+			return parseInt(line[1]);
+		}
+	}
+	return -1;
+}
+
+function getNumberofChannels(){
+	logWindow = split(getInfo("log"), "\n");
+
+	for (i = 0; i < logWindow.length; i++) {
+		line = split(logWindow[i], ":");
+		if(startsWith(line[0], "nC") > 0){
 			return parseInt(line[1]);
 		}
 	}
