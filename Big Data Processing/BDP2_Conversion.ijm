@@ -72,7 +72,7 @@ macro "Luxendo File Converter"{
 		run("BDP2 Save As...", "inputimage=[raw] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=false projectionmode=[" + projType + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
 	}
 	if(down){
-		run("BDP2 Bin...", "inputimage=[raw] outputimagename=[raw-bin-" + downXY + "-" + downZ + "] viewingmodality=[Do not show] binwidthxpixels=" + downXY + " binwidthypixels=" + downZ + " binwidthzpixels=1 ");
+		run("BDP2 Bin...", "inputimage=[raw] outputimagename=[raw-bin-" + downXY + "-" + downZ + "] viewingmodality=[Do not show] binwidthxpixels=" + downXY + " binwidthypixels=" + downXY + " binwidthzpixels=" + downZ + " ");
 		run("BDP2 Save As...", "inputimage=[raw-bin-" + downXY + "-" + downZ + "] directory=[" + output + "] numiothreads=1 numprocessingthreads=" + nCPUs + " filetype=[TIFFVolumes] saveprojections=false projectionmode=[" + projType + "] savevolumes=true channelnames=[Channel index (C00, C01, ...)] tiffcompression=[LZW] tstart=0 tend=" + nT + " ");
 	}
 }
